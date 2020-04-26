@@ -1,0 +1,178 @@
+﻿using EasyPayLibrary;
+using NUnit.Framework;
+
+namespace EasyPayTests
+{
+    [TestFixture]
+    [Category("All")]
+    [Category("User")]
+    [Parallelizable(ParallelScope.Fixtures)]
+    public class User : BaseTest
+    {
+        UserHomePage homePage;
+
+        [SetUp]
+        public override void PreCondition()
+        {
+            base.PreCondition();
+            LogProgress("User is going to login page");
+            var loginPage = welcomePage.SignIn();
+            homePage = loginPage.LoginAsUser("user1@gmail.com", "Admin123");
+        }
+
+
+        [Test]
+        public void ScheduleNotAvailable()
+        {
+            LogProgress("Getting sidebar menus");
+            var list = homePage.GetListOfSidebarMenus();
+            foreach (var element in list)
+            {
+                Assert.False(element.GetText() == "Schedule", "Element found");
+            }
+        }
+
+        [Test]
+        public void UserIsAbleToLogin()
+        {
+            LogProgress("Get role");
+            var role = GeneralPage.GetRole(driver);
+            Assert.AreEqual("USER", role, "user isn't loged in");
+        }
+
+        [Test]
+        public void PersonalCabinetAccess()
+        {
+            LogProgress("User is going to profile");
+            var profile = homePage.GoToProfile();
+            var nameVisibility = profile.NameIsVisible();
+            Assert.AreEqual(true, nameVisibility, "Name isn't visible");
+            var SurnameVisibility = profile.SurnameIsVisible();
+            Assert.AreEqual(true, SurnameVisibility, "Surname isn't visible");
+            var phoneNumberVisibility = profile.PhoneNumberIsVisible();
+            Assert.AreEqual(true, phoneNumberVisibility, "PhoneNumber isn't visible");
+        }
+
+        [Test]
+        public void PersonalInfoMatch()
+        {
+            LogProgress("User is going to profile");
+            var profile = homePage.GoToProfile();
+            var name = profile.GetName();
+            StringAssert.AreEqualIgnoringCase("Masha", name, "Wrong name");
+            var surname = profile.GetSurname();
+            StringAssert.AreEqualIgnoringCase("Chuikina", surname, "Wrong surname");
+            var phoneNumber = profile.GetPhoneNumber();
+            StringAssert.AreEqualIgnoringCase("+380968780876", phoneNumber, "Wrong name");
+        }
+
+        [Test]
+        public void IsNameChanging()
+        {
+            LogProgress("User is going to profile");
+            var profile = homePage.GoToProfile();
+            LogProgress("User sets his name in profile");
+            profile.SetName("Masha");
+            LogProgress("User updates his profile");
+            profile.UpdateProfile();
+            var successAlertDiplayed = profile.IsSuccessAlertDisplayed();
+            Assert.AreEqual(true, successAlertDiplayed);
+            var name = profile.GetName();
+            Assert.AreEqual("Masha", name, "Name doesn't change");
+        }
+
+        [Test]
+        public void SelectAddresseUtilities()
+        {
+            LogProgress("User is going to Utilities");
+            var utilities = homePage.NavigateToConnectedUtilitiesPage();
+            LogProgress("User choosing Address");
+            var result = utilities.SelectAddress("Чернівці City, вулиця Шевченка Str., 44/54");
+            Assert.AreEqual("Чернівці City, вулиця Шевченка Str., 44/54", result, "Address is not selected");
+        }
+
+        [Test]
+        public void RateInspectors()
+        {
+            LogProgress("User is going to RateInspectors");
+            var rateInspectors = homePage.NavigateToRateInspectorsPage();
+            LogProgress("Return RateInspectors Page");
+            var inspectorsPage = rateInspectors.ReturnRateInspectors();
+            LogProgress("User is going to RateInspectors");
+            var result = inspectorsPage.Rate("Oleg Adamov", (float)4.5);
+            Assert.AreEqual(result.GetText(), "Success");
+        }
+
+        [Test]
+        public void SelectAddresseOnPaymentsHistory()
+        {
+            LogProgress("User is going to PaymentHistory");
+            var paymentsHistory = homePage.NavigateToPaymentHistoryPage();
+            LogProgress("User choosing address ");
+            var result = paymentsHistory.SelectAddress("Чернівецька область, Чернівці, вулиця Пушкіна 12");
+            Assert.AreEqual("Чернівецька область, Чернівці, вулиця Пушкіна 12", result, "Adress is not selected");
+        }
+
+        [Test]
+        public void DisconnectUtilities()
+        {
+            using (var conn = new DatabaseManipulation.DatabaseManager())
+            {
+                conn.Open();
+                conn.ChangeInDB("update counters set is_active = true where debt_id = 23");
+            }
+            LogProgress("User is going to utilities");
+            var utilities = homePage.NavigateToConnectedUtilitiesPage();
+            LogProgress("User choosing address ");
+            utilities.SelectAddress("Чернівці City, вулиця Шевченка Str., 44/54");
+            LogProgress("User disconects Utility");
+            var newUtilities = utilities.Disconect();
+            LogProgress("User choosing address ");
+            newUtilities.SelectAddress("Чернівці City, вулиця Шевченка Str., 44/54");
+            var result = newUtilities.VerifyThatUtilitiExist();
+            Assert.IsNull(result, "Utility wasn't disconnected");
+        }
+
+        [Test(Description = "Repeat 2 times")]
+        public void ChangeMetrics()
+        {
+            LogProgress("User is going to Payment ");
+            var pay = homePage.NavigateToPaymentPage();
+            LogProgress("User is changing metrics ");
+            pay.ChangeMetrics("вулиця Нагірна 5, Чернівці, Чернівецька область", "42");
+            LogProgress("User choosing address ");
+            pay.SelectAddress("вулиця Нагірна 5, Чернівці, Чернівецька область");
+            Assert.Negative(pay.GetBalance(), "Incorrect value");
+        }
+
+        [Test]
+        public void ListOfInspectorsNotEmpty()
+        {
+            LogProgress("User is going to Rate Inspectors ");
+            var rateinspectors = homePage.NavigateToRateInspectorsPage();
+            LogProgress("User is going to log out ");
+            var logOut = rateinspectors.LogOut();
+            LogProgress("User is logging as Manager ");
+            var loginManager = logOut.LoginAsManager("manager1@gmail.com", "Admin123");
+            LogProgress("User is going to Inspectors List ");
+            var rateInspectors = loginManager.NavigateToInspectorsList();
+            var res = rateInspectors.VerifyListOfInspectorsIsNotEmpty();
+            Assert.IsNotEmpty(res, "List of Inspector is empty");
+        }
+
+        [Test]
+        public void ListOfUtilitiesNotEmpty()
+        {
+            LogProgress("User is going to Payment History ");
+            var paymentsHistory = homePage.NavigateToPaymentHistoryPage();
+            LogProgress("User is going to log out ");
+            var logOut = paymentsHistory.LogOut();
+            LogProgress("User is logging as Admin ");
+            var loginAdmin = logOut.LoginAsAdmin("admin1@gmail.com", "Admin123");
+            LogProgress("User is going to Utilities ");
+            var utilities = loginAdmin.NavigateToUtilities();
+            var res = utilities.UtilitiesTableIsVisible();
+            Assert.IsTrue(res, "List of Utilities is empty");
+        }
+    }
+}
